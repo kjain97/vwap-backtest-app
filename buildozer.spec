@@ -10,12 +10,11 @@ orientation = portrait
 fullscreen = 0
 android.presplash_color = #1a1a2e
 android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,FOREGROUND_SERVICE,WAKE_LOCK
-android.api = 33
+android.api = 34
 android.minapi = 24
 android.ndk = 25b
-android.sdk = 33
+android.sdk = 34
 android.accept_sdk_license = True
-p4a.branch = master
 android.logcat_filters = *:S python:D
 android.archs = arm64-v8a, armeabi-v7a
 
