@@ -8,14 +8,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -27,28 +27,56 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update -q
+          sudo apt-get update -qq
           sudo apt-get install -y \
-            git zip unzip \
-            python3-pip autoconf libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            git zip unzip wget curl \
+            python3-pip python3-setuptools \
+            autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 \
             cmake libffi-dev libssl-dev \
-            build-essential ccache
+            build-essential ccache \
+            lld llvm \
+            libltdl-dev \
+            ant
 
       - name: Install Python build tools
-        run: pip install buildozer cython virtualenv
+        run: |
+          pip install --upgrade pip
+          pip install buildozer==1.5.0 cython==0.29.37 virtualenv
 
-      - name: Cache buildozer global directory
+      - name: Cache buildozer and Android SDK/NDK
         uses: actions/cache@v4
         with:
           path: |
             ~/.buildozer
-            .buildozer
-          key: buildozer-${{ hashFiles('buildozer.spec') }}-v2
-          restore-keys: buildozer-
+            ~/.android
+          key: buildozer-android-${{ hashFiles('buildozer.spec') }}-v3
+          restore-keys: |
+            buildozer-android-
+
+      - name: Accept Android SDK licenses
+        run: |
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          yes | sdkmanager --licenses 2>/dev/null || true
+        continue-on-error: true
 
       - name: Build debug APK
-        run: buildozer -v android debug
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROIDAPI: "33"
+          ANDROIDMINAPI: "24"
+        run: |
+          buildozer -v android debug 2>&1 | tee build.log
+          echo "Exit code: $?"
+
+      - name: Show build log on failure
+        if: failure()
+        run: |
+          echo "=== Last 100 lines of build log ==="
+          tail -100 build.log || true
+          echo "=== .buildozer/android/platform errors ==="
+          find .buildozer -name "*.log" -exec tail -50 {} \; 2>/dev/null || true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -57,3 +85,12 @@ jobs:
           path: bin/*.apk
           retention-days: 30
           if-no-files-found: error
+
+      - name: Upload build log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
+          if-no-files-found: ignore
