@@ -3,7 +3,7 @@ main.py  -  VWAP Backtest Engine  (Kivy Android App)
 Dark-mode trading dashboard. Runs backtests in background thread,
 streams events to the UI live, saves trade logs to /sdcard/trading_logs/.
 """
-import os, json, threading
+import os, sys, json, threading, importlib.util
 from datetime import datetime
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -14,7 +14,29 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.graphics import Color, Rectangle
 from kivy.clock import Clock, mainthread
 from kivy.core.window import Window
-from strategy_engine import BacktestRunner, sample_sept17_sensex_bars, sample_sept15_nifty_bars
+
+# Try loading hot-swappable strategy from SD card first
+def load_strategy_engine():
+    ext_path = "/sdcard/trading_logs/strategy_engine.py"
+    fallback_path = os.path.join(os.path.expanduser("~"), "trading_logs", "strategy_engine.py")
+    
+    target_path = ext_path if os.path.exists(ext_path) else (fallback_path if os.path.exists(fallback_path) else None)
+    
+    if target_path:
+        print(f"Loading dynamic strategy from: {target_path}")
+        spec = importlib.util.spec_from_file_location("strategy_engine_dynamic", target_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    
+    print("Loading baked-in strategy engine")
+    import strategy_engine as mod
+    return mod
+
+engine_mod = load_strategy_engine()
+BacktestRunner = engine_mod.BacktestRunner
+sample_sept17_sensex_bars = engine_mod.sample_sept17_sensex_bars
+sample_sept15_nifty_bars = engine_mod.sample_sept15_nifty_bars
 
 # ── colours ──────────────────────────────────────────────────────
 BG     = (0.10, 0.10, 0.18, 1)
@@ -137,7 +159,8 @@ class VWAPApp(App):
         b_stop  = self._btn("⏹  STOP",     (0.55, 0.12, 0.12, 1), self.on_stop)
         b_next  = self._btn("⇄  DATASET",  ACCENT,                 self.on_next_dataset)
         b_logs  = self._btn("📋  LOGS",    (0.20, 0.20, 0.35, 1), self.on_show_logs)
-        for b in (b_run, b_stop, b_next, b_logs): btn_row.add_widget(b)
+        b_reld  = self._btn("🔄 RELOAD",   WARN,                   self.on_reload_strategy)
+        for b in (b_run, b_stop, b_next, b_logs, b_reld): btn_row.add_widget(b)
         root.add_widget(btn_row)
 
         Clock.schedule_interval(self.tick_clock, 1)
@@ -158,6 +181,19 @@ class VWAPApp(App):
         self.lbl_clock.text = datetime.now().strftime("%d-%b %H:%M:%S")
 
     # ── Button handlers ────────────────────────────────────
+    def on_reload_strategy(self, *_):
+        if self.running: return
+        global engine_mod, BacktestRunner, sample_sept17_sensex_bars, sample_sept15_nifty_bars, SAMPLES
+        engine_mod = load_strategy_engine()
+        BacktestRunner = engine_mod.BacktestRunner
+        sample_sept17_sensex_bars = engine_mod.sample_sept17_sensex_bars
+        sample_sept15_nifty_bars = engine_mod.sample_sept15_nifty_bars
+        SAMPLES["17-Sep SENSEX (+90 pts)"] = sample_sept17_sensex_bars
+        SAMPLES["15-Sep NIFTY  (Long PE)"] = sample_sept15_nifty_bars
+        self.runner = BacktestRunner()
+        self.log_grid.clear_widgets()
+        self.log_grid.add_widget(Label(text="Strategy Engine Reloaded ✅", size_hint_y=None, height=28, color=POS, font_size=12))
+
     def on_run(self, *_):
         if self.running: return
         self.running = True
