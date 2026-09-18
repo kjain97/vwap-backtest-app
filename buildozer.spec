@@ -1,4 +1,4 @@
-﻿[app]
+[app]
 title = VWAP Backtest Engine
 package.name = vwapbacktest
 package.domain = org.tradingbot

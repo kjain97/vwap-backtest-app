@@ -1,4 +1,4 @@
-﻿"""
+"""
 main.py  -  VWAP Backtest Engine  (Kivy Android App)
 Dark-mode trading dashboard. Runs backtests in background thread,
 streams events to the UI live, saves trade logs to /sdcard/trading_logs/.

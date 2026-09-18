@@ -1,4 +1,4 @@
-﻿from datetime import datetime, time
+from datetime import datetime, time
 from typing import Dict, Any, Optional, Tuple, List
 
 SCHEDULE_CONFIG = {
